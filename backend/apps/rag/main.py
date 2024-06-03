@@ -46,12 +46,6 @@ import json
 
 import sentence_transformers
 
-from apps.web.models.documents import (
-    Documents,
-    DocumentForm,
-    DocumentResponse,
-)
-
 # from apps.rag.utils import (
 #     get_model_path,
 #     get_embedding_function,
@@ -134,54 +128,6 @@ config = app.state.config
 # app.state.config.YOUTUBE_LOADER_LANGUAGE = YOUTUBE_LOADER_LANGUAGE
 # app.state.YOUTUBE_LOADER_TRANSLATION = None
 
-
-# def update_embedding_model(
-#     embedding_model: str,
-#     update_model: bool = False,
-# ):
-#     if embedding_model and app.state.config.RAG_EMBEDDING_ENGINE == "":
-#         app.state.sentence_transformer_ef = sentence_transformers.SentenceTransformer(
-#             get_model_path(embedding_model, update_model),
-#             device=DEVICE_TYPE,
-#             trust_remote_code=RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE,
-#         )
-#     else:
-#         app.state.sentence_transformer_ef = None
-
-
-# def update_reranking_model(
-#     reranking_model: str,
-#     update_model: bool = False,
-# ):
-#     if reranking_model:
-#         app.state.sentence_transformer_rf = sentence_transformers.CrossEncoder(
-#             get_model_path(reranking_model, update_model),
-#             device=DEVICE_TYPE,
-#             trust_remote_code=RAG_RERANKING_MODEL_TRUST_REMOTE_CODE,
-#         )
-#     else:
-#         app.state.sentence_transformer_rf = None
-
-
-# update_embedding_model(
-#     app.state.config.RAG_EMBEDDING_MODEL,
-#     RAG_EMBEDDING_MODEL_AUTO_UPDATE,
-# )
-
-# update_reranking_model(
-#     app.state.config.RAG_RERANKING_MODEL,
-#     RAG_RERANKING_MODEL_AUTO_UPDATE,
-# )
-
-
-# app.state.EMBEDDING_FUNCTION = get_embedding_function(
-#     app.state.config.RAG_EMBEDDING_ENGINE,
-#     app.state.config.RAG_EMBEDDING_MODEL,
-#     app.state.sentence_transformer_ef,
-#     app.state.config.OPENAI_API_KEY,
-#     app.state.config.OPENAI_API_BASE_URL,
-# )
-
 origins = ["*"]
 
 
@@ -215,6 +161,28 @@ async def get_status():
     }
 
 
+
+# IDK if this works
+@app.get("/state")
+async def set_state(state):
+    if state == "on":
+        config.state = False
+        return {
+        "status": False,
+    }
+    else:
+        config.state = True
+        return {
+        "status": True,
+    }
+    
+
+
+
+
+
+
+
 @app.get("/embedding")
 async def get_embedding_config(user=Depends(get_admin_user)):
     return {
@@ -238,69 +206,24 @@ class EmbeddingModelUpdateForm(BaseModel):
 
 
 @app.post("/embedding/update")
-async def update_embedding_config(
-    form_data: EmbeddingModelUpdateForm, user=Depends(get_admin_user)
-):
-    log.info(
-        f"Updating embedding model: {app.state.config.RAG_EMBEDDING_MODEL} to {form_data.embedding_model}"
+async def update_embedding_config():
+    log.exception(f"Problem updating embedding model: This functionality has been disabled")
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=ERROR_MESSAGES.DEFAULT("This functionality has been disabled"),
     )
-    try:
-        app.state.config.RAG_EMBEDDING_ENGINE = form_data.embedding_engine
-        app.state.config.RAG_EMBEDDING_MODEL = form_data.embedding_model
-
-        update_embedding_model(app.state.config.RAG_EMBEDDING_MODEL)
-
-        app.state.EMBEDDING_FUNCTION = get_embedding_function(
-            app.state.config.RAG_EMBEDDING_ENGINE,
-            app.state.config.RAG_EMBEDDING_MODEL,
-            app.state.sentence_transformer_ef,
-            app.state.config.OPENAI_API_KEY,
-            app.state.config.OPENAI_API_BASE_URL,
-        )
-
-        return {
-            "status": True,
-            "embedding_engine": app.state.config.RAG_EMBEDDING_ENGINE,
-            "embedding_model": app.state.config.RAG_EMBEDDING_MODEL,
-            "openai_config": {
-                "url": app.state.config.OPENAI_API_BASE_URL,
-                "key": app.state.config.OPENAI_API_KEY,
-            },
-        }
-    except Exception as e:
-        log.exception(f"Problem updating embedding model: This functionality has been disabled")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ERROR_MESSAGES.DEFAULT(e),
-        )
-
 
 class RerankingModelUpdateForm(BaseModel):
     reranking_model: str
 
 
 @app.post("/reranking/update")
-async def update_reranking_config(
-    form_data: RerankingModelUpdateForm, user=Depends(get_admin_user)
-):
-    log.info(
-        f"Updating reranking model: {app.state.config.RAG_RERANKING_MODEL} to {form_data.reranking_model}"
+async def update_reranking_config():
+    log.exception(f"Problem updating reranking model: This functionality has been disabled")
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=ERROR_MESSAGES.DEFAULT("This functionality has been disabled"),
     )
-    try:
-        app.state.config.RAG_RERANKING_MODEL = form_data.reranking_model
-
-        update_reranking_model(app.state.config.RAG_RERANKING_MODEL), True
-
-        return {
-            "status": True,
-            "reranking_model": app.state.config.RAG_RERANKING_MODEL,
-        }
-    except Exception as e:
-        log.exception(f"Problem updating reranking model: This functionality has been disabled")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ERROR_MESSAGES.DEFAULT(e),
-        )
 
 
 @app.get("/config")
@@ -472,8 +395,8 @@ def query_doc_handler(
     except Exception as e:
         log.exception(e)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT(e),
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=ERROR_MESSAGES.DEFAULT("This functionality has been disabled"),
         )
 
 
@@ -513,8 +436,8 @@ def query_collection_handler(
     except Exception as e:
         log.exception(e)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT(e),
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=ERROR_MESSAGES.DEFAULT("This functionality has been disabled"),
         )
 
 
@@ -771,61 +694,64 @@ def resolve_hostname(hostname):
 #     return loader, known_type
 
 
-# @app.post("/doc")
-# def store_doc(
-#     collection_name: Optional[str] = Form(None),
-#     file: UploadFile = File(...),
-#     user=Depends(get_current_user),
-# ):
-#     # "https://www.gutenberg.org/files/1727/1727-h/1727-h.htm"
+# TODO: This function is adding docs on main chat screen bottom.
+@app.post("/doc")
+def store_doc(
+    collection_name: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    # log.info(f"file.content_type: {file.content_type}")
+    try:
+        raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=ERROR_MESSAGES.DEFAULT("This functionality has been disabled"),
+    )
+    #     unsanitized_filename = file.filename
+    #     filename = os.path.basename(unsanitized_filename)
 
-#     log.info(f"file.content_type: {file.content_type}")
-#     try:
-#         unsanitized_filename = file.filename
-#         filename = os.path.basename(unsanitized_filename)
+    #     file_path = f"{UPLOAD_DIR}/{filename}"
 
-#         file_path = f"{UPLOAD_DIR}/{filename}"
+    #     contents = file.file.read()
+    #     with open(file_path, "wb") as f:
+    #         f.write(contents)
+    #         f.close()
+    #     yep this won't be working'
+    #     f = open(file_path, "rb")
+    #     if collection_name == None:
+    #         collection_name = calculate_sha256(f)[:63]
+    #     f.close()
 
-#         contents = file.file.read()
-#         with open(file_path, "wb") as f:
-#             f.write(contents)
-#             f.close()
+    #     loader, known_type = get_loader(filename, file.content_type, file_path)
+    #     data = loader.load()
 
-#         f = open(file_path, "rb")
-#         if collection_name == None:
-#             collection_name = calculate_sha256(f)[:63]
-#         f.close()
+    #     try:
+    #         result = store_data_in_vector_db(data, collection_name)
 
-#         loader, known_type = get_loader(filename, file.content_type, file_path)
-#         data = loader.load()
-
-#         try:
-#             result = store_data_in_vector_db(data, collection_name)
-
-#             if result:
-#                 return {
-#                     "status": True,
-#                     "collection_name": collection_name,
-#                     "filename": filename,
-#                     "known_type": known_type,
-#                 }
-#         except Exception as e:
-#             raise HTTPException(
-#                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                 detail=e,
-#             )
-#     except Exception as e:
-#         log.exception(e)
-#         if "No pandoc was found" in str(e):
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail=ERROR_MESSAGES.PANDOC_NOT_INSTALLED,
-#             )
-#         else:
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail=ERROR_MESSAGES.DEFAULT(e),
-#             )
+    #         if result:
+    #             return {
+    #                 "status": True,
+    #                 "collection_name": collection_name,
+    #                 "filename": filename,
+    #                 "known_type": known_type,
+    #             }
+    #     except Exception as e:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #             detail=e,
+    #         )
+    except Exception as e:
+        log.exception(e)
+        if "No pandoc was found" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.PANDOC_NOT_INSTALLED,
+            )
+        else:
+            raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ERROR_MESSAGES.DEFAULT("This functionality has been disabled"),
+            )
 
 
 # class TextRAGForm(BaseModel):
