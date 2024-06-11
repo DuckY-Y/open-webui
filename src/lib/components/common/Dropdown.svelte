@@ -6,6 +6,11 @@
 
 	export let show = false;
 	const dispatch = createEventDispatcher();
+	function handleSpecificItemClick(event) {
+        event.stopPropagation(); // Prevent the dropdown from closing
+        // Add any additional logic for the click event here
+        console.log("Specific item clicked, dropdown stays open.");
+    }
 </script>
 
 <DropdownMenu.Root

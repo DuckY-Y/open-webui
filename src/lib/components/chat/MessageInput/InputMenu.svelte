@@ -14,15 +14,18 @@
 	import Switch from '$lib/components/common/Switch.svelte';
 	import GlobeAltSolid from '$lib/components/icons/GlobeAltSolid.svelte';
 	import { config } from '$lib/stores';
+	import { switchState } from '$lib/stores';
 
 	const i18n = getContext('i18n');
-
-	export let uploadFilesHandler: Function;
-	export let webSearchEnabled: boolean;
+	let show = false;
 
 	export let onClose: Function;
 
-	let show = false;
+	function toggleState(event: CustomEvent<{ currentTarget: EventTarget & HTMLDivElement; originalEvent: MouseEvent; }>) {
+		switchState.update(current => (current + 1) % 3); // Cycles through 0, 1, 2
+	}
+
+	console.log(switchState);
 </script>
 
 <Dropdown
@@ -33,7 +36,7 @@
 		}
 	}}
 >
-	<Tooltip content={$i18n.t('More')}>
+	<Tooltip content={$i18n.t('RAG')}>
 		<slot />
 	</Tooltip>
 
@@ -46,29 +49,16 @@
 			align="start"
 			transition={flyAndScale}
 		>
-			{#if $config?.features?.enable_web_search}
-				<div
-					class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer rounded-xl"
-				>
-					<div class="flex-1 flex items-center gap-2">
-						<GlobeAltSolid />
-						<div class="flex items-center">{$i18n.t('Web Search')}</div>
-					</div>
-
-					<Switch bind:state={webSearchEnabled} />
-				</div>
-
-				<hr class="border-gray-100 dark:border-gray-800 my-1" />
-			{/if}
-
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800  rounded-xl"
-				on:click={() => {
-					uploadFilesHandler();
-				}}
+				class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer rounded-xl"
+				on:click={toggleState}
 			>
 				<DocumentArrowUpSolid />
-				<div class="flex items-center">{$i18n.t('Upload Files')}</div>
+					<div class="flex items-center">{$i18n.t('Switch State')}</div>
+					<div class="ml-auto">
+						<!-- Display the current state -->
+						{$switchState}
+					</div>
 			</DropdownMenu.Item>
 		</DropdownMenu.Content>
 	</div>

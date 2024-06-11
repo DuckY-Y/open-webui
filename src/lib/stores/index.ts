@@ -46,6 +46,8 @@ export const showSettings = writable(false);
 export const showArchivedChats = writable(false);
 export const showChangelog = writable(false);
 
+export const switchState = writable(0);
+
 export type Model = OpenAIModel | OllamaModel;
 
 type BaseModel = {
