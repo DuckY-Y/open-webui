@@ -22,6 +22,7 @@
 	export let onClose: Function;
 
 	function toggleState(event: CustomEvent<{ currentTarget: EventTarget & HTMLDivElement; originalEvent: MouseEvent; }>) {
+		event.stopPropagation(); // Prevent event from bubbling up
 		switchState.update(current => (current + 1) % 3); // Cycles through 0, 1, 2
 	}
 
@@ -51,7 +52,7 @@
 		>
 			<DropdownMenu.Item
 				class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer rounded-xl"
-				on:click={toggleState}
+				on:click={event => toggleState(event)}
 			>
 				<DocumentArrowUpSolid />
 					<div class="flex items-center">{$i18n.t('Switch State')}</div>
