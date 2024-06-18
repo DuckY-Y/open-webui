@@ -6,32 +6,26 @@
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import DocumentArrowUpSolid from '$lib/components/icons/DocumentArrowUpSolid.svelte';
-	import Switch from '$lib/components/common/Switch.svelte';
-	import GlobeAltSolid from '$lib/components/icons/GlobeAltSolid.svelte';
-	import { config } from '$lib/stores';
-	import WrenchSolid from '$lib/components/icons/WrenchSolid.svelte';
+
+	import { switchState } from '$lib/stores';
+	import { get } from 'svelte/store';
+	import { updateRagState } from '$lib/apis/rag';
 
 	const i18n = getContext('i18n');
+	let show = false;
 
-	export let uploadFilesHandler: Function;
-
-	export let selectedToolIds: string[] = [];
-	export let webSearchEnabled: boolean;
-
-	export let tools = {};
 	export let onClose: Function;
 
-	$: tools = Object.fromEntries(
-		Object.keys(tools).map((toolId) => [
-			toolId,
-			{
-				...tools[toolId],
-				enabled: selectedToolIds.includes(toolId)
-			}
-		])
-	);
-
-	let show = false;
+	async function toggleState(event: CustomEvent<{ currentTarget: EventTarget & HTMLDivElement; originalEvent: MouseEvent; }>) {
+        event.stopPropagation();
+        switchState.update(current => (current + 1) % 2); // Cycles through 0, 1 (, 2 -removed)
+		const switchState_updated = get(switchState);
+		console.log(switchState_updated);
+		await updateRagState(localStorage.token, switchState_updated);
+    }
+	
+	console.log(switchState);
+	console.log("InputMenu.svelte ^^")
 </script>
 
 <Dropdown
@@ -42,7 +36,7 @@
 		}
 	}}
 >
-	<Tooltip content={$i18n.t('More')}>
+	<Tooltip content={$i18n.t('RAG')}>
 		<slot />
 	</Tooltip>
 
@@ -55,57 +49,16 @@
 			align="start"
 			transition={flyAndScale}
 		>
-			{#if Object.keys(tools).length > 0}
-				<div class="  max-h-28 overflow-y-auto scrollbar-hidden">
-					{#each Object.keys(tools) as toolId}
-						<div
-							class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer rounded-xl"
-						>
-							<div class="flex-1 flex items-center gap-2">
-								<WrenchSolid />
-								<Tooltip content={tools[toolId]?.description ?? ''} className="flex-1">
-									<div class=" line-clamp-1">{tools[toolId].name}</div>
-								</Tooltip>
-							</div>
-
-							<Switch
-								bind:state={tools[toolId].enabled}
-								on:change={(e) => {
-									selectedToolIds = e.detail
-										? [...selectedToolIds, toolId]
-										: selectedToolIds.filter((id) => id !== toolId);
-								}}
-							/>
-						</div>
-					{/each}
-				</div>
-
-				<hr class="border-gray-100 dark:border-gray-800 my-1" />
-			{/if}
-
-			{#if $config?.features?.enable_web_search}
-				<div
-					class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer rounded-xl"
-				>
-					<div class="flex-1 flex items-center gap-2">
-						<GlobeAltSolid />
-						<div class=" line-clamp-1">{$i18n.t('Web Search')}</div>
-					</div>
-
-					<Switch bind:state={webSearchEnabled} />
-				</div>
-
-				<hr class="border-gray-100 dark:border-gray-800 my-1" />
-			{/if}
-
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800  rounded-xl"
-				on:click={() => {
-					uploadFilesHandler();
-				}}
+				class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer rounded-xl"
+				on:click={event => toggleState(event)}
 			>
 				<DocumentArrowUpSolid />
-				<div class=" line-clamp-1">{$i18n.t('Upload Files')}</div>
+					<div class="flex items-center">{$i18n.t('Switch State')}</div>
+					<div class="ml-auto">
+						<!-- Display the current state -->
+						{$switchState}
+					</div>
 			</DropdownMenu.Item>
 		</DropdownMenu.Content>
 	</div>

@@ -653,46 +653,38 @@
 							{/if}
 
 							<div class=" flex">
-								<div class=" ml-0.5 self-end mb-1.5 flex space-x-1">
-									<InputMenu
-										bind:webSearchEnabled
-										bind:selectedToolIds
-										tools={$tools.reduce((a, e, i, arr) => {
-											if (availableToolIds.includes(e.id) || ($_user?.role ?? 'user') === 'admin') {
-												a[e.id] = {
-													name: e.name,
-													description: e.meta.description,
-													enabled: false
-												};
-											}
-											return a;
-										}, {})}
-										uploadFilesHandler={() => {
-											filesInputElement.click();
-										}}
-										onClose={async () => {
-											await tick();
-											chatTextAreaElement?.focus();
-										}}
-									>
-										<button
-											class="bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-gray-850 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-2 outline-none focus:outline-none"
-											type="button"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												viewBox="0 0 16 16"
-												fill="currentColor"
-												class="size-5"
-											>
-												<path
-													d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"
-												/>
-											</svg>
-										</button>
-									</InputMenu>
-								</div>
-
+						    <div class=" ml-1 self-end mb-2 flex space-x-1">
+							    <InputMenu
+							    	onClose={async () => {
+									    await tick();
+									    chatTextAreaElement?.focus();
+								    }}
+							    >
+								    <button
+									    class="bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-gray-850 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5 outline-none focus:outline-none"
+									    type="button"
+								    >
+									    <svg
+										    xmlns="http://www.w3.org/2000/svg"
+										    viewBox="0 0 20 20"
+										    class="size-5">
+										    <!-- Define a linear gradient -->
+										    <defs>
+											    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+												    <stop offset="0%" stop-color="#ff0000"/> <!-- Start color -->
+												    <stop offset="100%" stop-color="#0000ff"/> <!-- End color -->
+											    </linearGradient>
+										    </defs>
+										
+										    <!-- Group for the icon -->
+										    <g fill="url(#gradient)"> <!-- Apply the linear gradient to the icon -->
+											    <path d="M10 6c3.9 0 7-.9 7-2s-3.1-2-7-2-7 .9-7 2 3.1 2 7 2zm0 9c-3.9 0-7-.9-7-2v3c0 1.1 3.1 2 7 2s7-.9 7-2v-3c0 1.1-3.1 2-7 2zm0-4c-3.9 0-7-.9-7-2v3c0 1.1 3.1 2 7 2s7-.9 7-2V9c0 1.1-3.1 2-7 2zm0-4c-3.9 0-7-.9-7-2v3c0 1.1 3.1 2 7 2s7-.9 7-2V5c0 1.1-3.1 2-7 2z"/>
+										    </g>
+									    </svg>
+								    </button>
+                                    </InputMenu>
+                                </div>
+                                
 								<textarea
 									id="chat-textarea"
 									bind:this={chatTextAreaElement}

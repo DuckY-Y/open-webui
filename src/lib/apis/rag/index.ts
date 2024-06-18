@@ -1,4 +1,5 @@
 import { RAG_API_BASE_URL } from '$lib/constants';
+import { switchState } from '$lib/stores';
 
 export const getRAGConfig = async (token: string) => {
 	let error = null;
@@ -43,6 +44,38 @@ type RAGConfigForm = {
 	web_loader_ssl_verification?: boolean;
 	youtube?: YoutubeConfigForm;
 };
+
+export const updateRagState = async (token: string, state: any) => {
+    let error = null;
+	console.log("input from frontend: " + JSON.stringify(state))
+    const res = await fetch(`${RAG_API_BASE_URL}/update/state`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+            switchState: state
+        })
+    })
+    .then(async (res) => {
+        if (!res.ok) throw await res.json();
+        return res.json();
+    })
+    .catch((err) => {
+        console.log(err);
+        error = err.detail;
+        return null;
+    });
+
+    if (error) {
+        throw error;
+    }
+
+    return res;
+};
+
+
 
 export const updateRAGConfig = async (token: string, payload: RAGConfigForm) => {
 	let error = null;

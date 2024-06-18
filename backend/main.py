@@ -64,6 +64,9 @@ from utils.task import (
     tools_function_calling_generation_template,
 )
 from utils.misc import get_last_user_message, add_or_update_system_message
+# from apps.rag.utils import rag_messages
+from apps.rag.vectorSearch import VectorSearch, rag_addition
+from apps.rag.main import query_index_handler
 
 from apps.rag.utils import get_rag_context, rag_template
 
@@ -123,7 +126,7 @@ print(
       |_|                                               
 
       
-v{VERSION} - building the best open-source AI user interface.
+v{VERSION} - hi.
 {f"Commit: {WEBUI_BUILD_HASH}" if WEBUI_BUILD_HASH != "dev-build" else ""}
 https://github.com/open-webui/open-webui
 """
@@ -185,97 +188,11 @@ async def get_function_call_response(messages, tool_id, template, task_model_id,
         + f"\nQuery: {user_message}"
     )
 
-    print(prompt)
-
-    payload = {
-        "model": task_model_id,
-        "messages": [
-            {"role": "system", "content": content},
-            {"role": "user", "content": f"Query: {prompt}"},
-        ],
-        "stream": False,
-    }
-
-    try:
-        payload = filter_pipeline(payload, user)
-    except Exception as e:
-        raise e
-
-    model = app.state.MODELS[task_model_id]
-
-    response = None
-    try:
-        if model["owned_by"] == "ollama":
-            response = await generate_ollama_chat_completion(
-                OpenAIChatCompletionForm(**payload), user=user
-            )
-        else:
-            response = await generate_openai_chat_completion(payload, user=user)
-
-        content = None
-
-        if hasattr(response, "body_iterator"):
-            async for chunk in response.body_iterator:
-                data = json.loads(chunk.decode("utf-8"))
-                content = data["choices"][0]["message"]["content"]
-
-            # Cleanup any remaining background tasks if necessary
-            if response.background is not None:
-                await response.background()
-        else:
-            content = response["choices"][0]["message"]["content"]
-
-        # Parse the function response
-        if content is not None:
-            print(f"content: {content}")
-            result = json.loads(content)
-            print(result)
-
-            # Call the function
-            if "name" in result:
-                if tool_id in webui_app.state.TOOLS:
-                    toolkit_module = webui_app.state.TOOLS[tool_id]
-                else:
-                    toolkit_module = load_toolkit_module_by_id(tool_id)
-                    webui_app.state.TOOLS[tool_id] = toolkit_module
-
-                function = getattr(toolkit_module, result["name"])
-                function_result = None
-                try:
-                    # Get the signature of the function
-                    sig = inspect.signature(function)
-                    # Check if '__user__' is a parameter of the function
-                    if "__user__" in sig.parameters:
-                        # Call the function with the '__user__' parameter included
-                        function_result = function(
-                            **{
-                                **result["parameters"],
-                                "__user__": {
-                                    "id": user.id,
-                                    "email": user.email,
-                                    "name": user.name,
-                                    "role": user.role,
-                                },
-                            }
-                        )
-                    else:
-                        # Call the function without modifying the parameters
-                        function_result = function(**result["parameters"])
-                except Exception as e:
-                    print(e)
-
-                # Add the function result to the system prompt
-                if function_result:
-                    return function_result
-    except Exception as e:
-        print(f"Error: {e}")
-
-    return None
-
-
 class ChatCompletionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        return_citations = False
+        
+        rag_state = getattr(rag_app.state.config, 'RAG_STATE', None)
+        return_citations = bool(rag_state)
 
         if request.method == "POST" and (
             "/ollama/api/chat" in request.url.path
@@ -290,79 +207,30 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
             # Parse string to JSON
             data = json.loads(body_str) if body_str else {}
 
-            user = get_current_user(
-                get_http_authorization_cred(request.headers.get("Authorization"))
-            )
 
-            # Remove the citations from the body
-            return_citations = data.get("citations", False)
+            # return_citations = data.get("citations", False)
             if "citations" in data:
                 del data["citations"]
 
-            # Set the task model
-            task_model_id = data["model"]
-            if task_model_id not in app.state.MODELS:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Model not found",
-                )
+            # Example: Add a new key-value pair or modify existing ones
+            # data["modified"] = True  # Example modification
 
-            # Check if the user has a custom task model
-            # If the user has a custom task model, use that model
-            if app.state.MODELS[task_model_id]["owned_by"] == "ollama":
-                if (
-                    app.state.config.TASK_MODEL
-                    and app.state.config.TASK_MODEL in app.state.MODELS
-                ):
-                    task_model_id = app.state.config.TASK_MODEL
-            else:
-                if (
-                    app.state.config.TASK_MODEL_EXTERNAL
-                    and app.state.config.TASK_MODEL_EXTERNAL in app.state.MODELS
-                ):
-                    task_model_id = app.state.config.TASK_MODEL_EXTERNAL
+            if bool(rag_state):
+                try:
+                    data = {**data}
+                    data["messages"], citations = rag_addition(
+                        docs=data["docs"],
+                        messages=data["messages"],
+                        template=rag_app.state.config.RAG_TEMPLATE,
+                        r=rag_app.state.config.RELEVANCE_THRESHOLD,
+                        hybrid_search=rag_app.state.config.ENABLE_RAG_HYBRID_SEARCH,
+                    )
+                except Exception as e:
+                    log.exception(e)
+                    print("RAG addition failed")
 
-            prompt = get_last_user_message(data["messages"])
-            context = ""
 
-            # If tool_ids field is present, call the functions
-            if "tool_ids" in data:
-                print(data["tool_ids"])
-                for tool_id in data["tool_ids"]:
-                    print(tool_id)
-                    try:
-                        response = await get_function_call_response(
-                            messages=data["messages"],
-                            tool_id=tool_id,
-                            template=app.state.config.TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
-                            task_model_id=task_model_id,
-                            user=user,
-                        )
-
-                        if response:
-                            context += ("\n" if context != "" else "") + response
-                    except Exception as e:
-                        print(f"Error: {e}")
-                del data["tool_ids"]
-
-                print(f"tool_context: {context}")
-
-            # If docs field is present, generate RAG completions
             if "docs" in data:
-                data = {**data}
-                rag_context, citations = get_rag_context(
-                    docs=data["docs"],
-                    messages=data["messages"],
-                    embedding_function=rag_app.state.EMBEDDING_FUNCTION,
-                    k=rag_app.state.config.TOP_K,
-                    reranking_function=rag_app.state.sentence_transformer_rf,
-                    r=rag_app.state.config.RELEVANCE_THRESHOLD,
-                    hybrid_search=rag_app.state.config.ENABLE_RAG_HYBRID_SEARCH,
-                )
-
-                if rag_context:
-                    context += ("\n" if context != "" else "") + rag_context
-
                 del data["docs"]
 
                 log.debug(f"rag_context: {rag_context}, citations: {citations}")
@@ -546,7 +414,7 @@ class PipelineMiddleware(BaseHTTPMiddleware):
     async def _receive(self, body: bytes):
         return {"type": "http.request", "body": body, "more_body": False}
 
-
+# This middleware runs first
 app.add_middleware(PipelineMiddleware)
 
 
@@ -574,12 +442,12 @@ async def check_url(request: Request, call_next):
     return response
 
 
-@app.middleware("http")
-async def update_embedding_function(request: Request, call_next):
-    response = await call_next(request)
-    if "/embedding/update" in request.url.path:
-        webui_app.state.EMBEDDING_FUNCTION = rag_app.state.EMBEDDING_FUNCTION
-    return response
+# @app.middleware("http")
+# async def update_embedding_function(request: Request, call_next):
+#     response = await call_next(request)
+#     if "/embedding/update" in request.url.path:
+#         webui_app.state.EMBEDDING_FUNCTION = rag_app.state.EMBEDDING_FUNCTION
+#     return response
 
 
 app.mount("/ws", socket_app)
@@ -594,7 +462,7 @@ app.mount("/rag/api/v1", rag_app)
 
 app.mount("/api/v1", webui_app)
 
-webui_app.state.EMBEDDING_FUNCTION = rag_app.state.EMBEDDING_FUNCTION
+# webui_app.state.EMBEDDING_FUNCTION = rag_app.state.EMBEDDING_FUNCTION
 
 
 async def get_all_models():
@@ -1402,7 +1270,7 @@ async def get_app_config():
             "auth": WEBUI_AUTH,
             "auth_trusted_header": bool(webui_app.state.AUTH_TRUSTED_EMAIL_HEADER),
             "enable_signup": webui_app.state.config.ENABLE_SIGNUP,
-            "enable_web_search": rag_app.state.config.ENABLE_RAG_WEB_SEARCH,
+            # "enable_web_search": rag_app.state.config.ENABLE_RAG_WEB_SEARCH,
             "enable_image_generation": images_app.state.config.ENABLED,
             "enable_community_sharing": webui_app.state.config.ENABLE_COMMUNITY_SHARING,
             "enable_admin_export": ENABLE_ADMIN_EXPORT,
