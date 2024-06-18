@@ -23,7 +23,8 @@ ARG BUILD_HASH
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install -g npm@10.8.1
+RUN npm ci || npm ci || npm ci
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}

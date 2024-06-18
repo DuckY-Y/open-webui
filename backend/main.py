@@ -72,6 +72,7 @@ from apps.rag.utils import get_rag_context, rag_template
 
 from config import (
     CONFIG_DATA,
+    RAG_STATE,
     WEBUI_NAME,
     WEBUI_URL,
     WEBUI_AUTH,
@@ -143,6 +144,7 @@ app = FastAPI(
 )
 
 app.state.config = AppConfig()
+app.state.config.RAG_STATE = RAG_STATE
 
 app.state.config.ENABLE_OPENAI_API = ENABLE_OPENAI_API
 app.state.config.ENABLE_OLLAMA_API = ENABLE_OLLAMA_API
@@ -192,7 +194,7 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         
         rag_state = getattr(rag_app.state.config, 'RAG_STATE', None)
-        return_citations = bool(rag_state)
+        return_citations = rag_state is not None and rag_state != 0
 
         if request.method == "POST" and (
             "/ollama/api/chat" in request.url.path
@@ -215,16 +217,22 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
             # Example: Add a new key-value pair or modify existing ones
             # data["modified"] = True  # Example modification
 
+            prompt = get_last_user_message(data["messages"])
+
             if bool(rag_state):
                 try:
                     data = {**data}
-                    data["messages"], citations = rag_addition(
+                    rag_context, citations = rag_addition(
                         docs=data["docs"],
                         messages=data["messages"],
                         template=rag_app.state.config.RAG_TEMPLATE,
                         r=rag_app.state.config.RELEVANCE_THRESHOLD,
                         hybrid_search=rag_app.state.config.ENABLE_RAG_HYBRID_SEARCH,
                     )
+                    context = ""
+                    if rag_context:
+                        context += ("\n" if context != "" else "") + rag_context
+
                 except Exception as e:
                     log.exception(e)
                     print("RAG addition failed")
@@ -233,7 +241,7 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
             if "docs" in data:
                 del data["docs"]
 
-                log.debug(f"rag_context: {rag_context}, citations: {citations}")
+                log.debug(f"data['messages']: {data['messages']}, citations: {citations}")
 
             if context != "":
                 system_prompt = rag_template(

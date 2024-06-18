@@ -70,6 +70,7 @@ from config import (
     ENV,
     SRC_LOG_LEVELS,
     UPLOAD_DIR,
+    RAG_STATE,
     DOCS_DIR,
     RAG_TOP_K,
     RAG_RELEVANCE_THRESHOLD,
@@ -235,43 +236,6 @@ async def update_embedding_config():
         detail=ERROR_MESSAGES.DEFAULT("This functionality has been disabled"),
     )
 
-        if app.state.config.RAG_EMBEDDING_ENGINE in ["ollama", "openai"]:
-            if form_data.openai_config is not None:
-                app.state.config.OPENAI_API_BASE_URL = form_data.openai_config.url
-                app.state.config.OPENAI_API_KEY = form_data.openai_config.key
-                app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE = (
-                    form_data.openai_config.batch_size
-                    if form_data.openai_config.batch_size
-                    else 1
-                )
-
-        update_embedding_model(app.state.config.RAG_EMBEDDING_MODEL)
-
-        app.state.EMBEDDING_FUNCTION = get_embedding_function(
-            app.state.config.RAG_EMBEDDING_ENGINE,
-            app.state.config.RAG_EMBEDDING_MODEL,
-            app.state.sentence_transformer_ef,
-            app.state.config.OPENAI_API_KEY,
-            app.state.config.OPENAI_API_BASE_URL,
-            app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE,
-        )
-
-        return {
-            "status": True,
-            "embedding_engine": app.state.config.RAG_EMBEDDING_ENGINE,
-            "embedding_model": app.state.config.RAG_EMBEDDING_MODEL,
-            "openai_config": {
-                "url": app.state.config.OPENAI_API_BASE_URL,
-                "key": app.state.config.OPENAI_API_KEY,
-                "batch_size": app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE,
-            },
-        }
-    except Exception as e:
-        log.exception(f"Problem updating embedding model: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ERROR_MESSAGES.DEFAULT(e),
-        )
 
 
 class RerankingModelUpdateForm(BaseModel):
@@ -566,9 +530,9 @@ class SwitchStateForm(BaseModel):
 @app.post("/update/state")
 async def update_switch_state(switch_state: SwitchStateForm):
     print("\n")
-    print(f"This has been sent to the backend:  {switch_state.switchState}")
+    print(f"RAG state has been changed to:  {switch_state.switchState}")
     print("\n")
-    config.RAG_STATE = switch_state.switchState
+    app.state.config.RAG_STATE = switch_state.switchState
     return {switch_state.switchState}
    
 
@@ -677,16 +641,16 @@ def query_collection_handler(
 #         )
 
 
-def get_web_loader(url: Union[str, Sequence[str]], verify_ssl: bool = True):
-    # Check if the URL is valid
-    if not validate_url(url):
-        raise ValueError(ERROR_MESSAGES.INVALID_URL)
-    return SafeWebBaseLoader(
-        url,
-        verify_ssl=verify_ssl,
-        requests_per_second=RAG_WEB_SEARCH_CONCURRENT_REQUESTS,
-        continue_on_failure=True,
-    )
+# def get_web_loader(url: Union[str, Sequence[str]], verify_ssl: bool = True):
+#     # Check if the URL is valid
+#     if not validate_url(url):
+#         raise ValueError(ERROR_MESSAGES.INVALID_URL)
+#     return SafeWebBaseLoader(
+#         url,
+#         verify_ssl=verify_ssl,
+#         requests_per_second=RAG_WEB_SEARCH_CONCURRENT_REQUESTS,
+#         continue_on_failure=True,
+#     )
 
 # class TextRAGForm(BaseModel):
 #     name: str
@@ -1166,31 +1130,31 @@ def reset(user=Depends(get_admin_user)) -> bool:
     return True
 
 
-class SafeWebBaseLoader(WebBaseLoader):
-    """WebBaseLoader with enhanced error handling for URLs."""
+# class SafeWebBaseLoader(WebBaseLoader):
+#     """WebBaseLoader with enhanced error handling for URLs."""
 
-    def lazy_load(self) -> Iterator[Document]:
-        """Lazy load text from the url(s) in web_path with error handling."""
-        for path in self.web_paths:
-            try:
-                soup = self._scrape(path, bs_kwargs=self.bs_kwargs)
-                text = soup.get_text(**self.bs_get_text_kwargs)
+#     def lazy_load(self) -> Iterator[Document]:
+#         """Lazy load text from the url(s) in web_path with error handling."""
+#         for path in self.web_paths:
+#             try:
+#                 soup = self._scrape(path, bs_kwargs=self.bs_kwargs)
+#                 text = soup.get_text(**self.bs_get_text_kwargs)
 
-                # Build metadata
-                metadata = {"source": path}
-                if title := soup.find("title"):
-                    metadata["title"] = title.get_text()
-                if description := soup.find("meta", attrs={"name": "description"}):
-                    metadata["description"] = description.get(
-                        "content", "No description found."
-                    )
-                if html := soup.find("html"):
-                    metadata["language"] = html.get("lang", "No language found.")
+#                 # Build metadata
+#                 metadata = {"source": path}
+#                 if title := soup.find("title"):
+#                     metadata["title"] = title.get_text()
+#                 if description := soup.find("meta", attrs={"name": "description"}):
+#                     metadata["description"] = description.get(
+#                         "content", "No description found."
+#                     )
+#                 if html := soup.find("html"):
+#                     metadata["language"] = html.get("lang", "No language found.")
 
-                yield Document(page_content=text, metadata=metadata)
-            except Exception as e:
-                # Log the error and continue with the next URL
-                log.error(f"Error loading {path}: {e}")
+#                 yield Document(page_content=text, metadata=metadata)
+#             except Exception as e:
+#                 # Log the error and continue with the next URL
+#                 log.error(f"Error loading {path}: {e}")
 
 
 if ENV == "dev":

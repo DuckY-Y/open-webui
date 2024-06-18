@@ -1,6 +1,7 @@
 import marqo as mq
 import pprint
 import os, json
+from utils.misc import get_last_user_message, add_or_update_system_message
 
 from config import AppConfig
 config = AppConfig()
@@ -141,30 +142,7 @@ def rag_addition(
 ):
     print(f"Rag input: {messages} {template} {hybrid_search}")
 
-    last_user_message_idx = None
-    for i in range(len(messages) - 1, -1, -1):
-        if messages[i]["role"] == "user":
-            last_user_message_idx = i
-            break
-
-    user_message = messages[last_user_message_idx]
-
-    if isinstance(user_message["content"], list):
-        # Handle list content input
-        content_type = "list"
-        query = ""
-        for content_item in user_message["content"]:
-            if content_item["type"] == "text":
-                query = content_item["text"]
-                break
-    elif isinstance(user_message["content"], str):
-        # Handle text content input
-        content_type = "text"
-        query = user_message["content"]
-    else:
-        # Fallback in case the input does not match expected types
-        content_type = None
-        query = ""
+    query = get_last_user_message(messages)
 
     integ = config.RAG_STATE
     if query != "":
@@ -183,8 +161,6 @@ def rag_addition(
     context_string = ""
     citations = []
     for item in parsed_output:
-
-        # Initialize an empty list to hold all 'content_N' values
         content_N = []
         # Check if 'content' key exists and is a list with at least one item
         if item.get("content") and isinstance(item["content"], list) and len(item["content"]) > 0:
@@ -197,7 +173,7 @@ def rag_addition(
             context_string += "\n\n".join(
                 [text for text in content_N if text is not None]
                 )
-        citation = {
+        citations.append({
             "source": item.get("_id", ""),
             "document": content_N,
             "metadata": {
@@ -206,29 +182,7 @@ def rag_addition(
                 "highlights": item.get("_highlights", {})
             }
         }
-    citations.append(citation)
+        )
 
-    ra_content = rag_template(
-        template=template,
-        context=context_string,
-        query=query,
-    )
-    if content_type == "list":
-        new_content = []
-        for content_item in user_message["content"]:
-            if content_item["type"] == "text":
-                # Update the text item's content with ra_content
-                new_content.append({"type": "text", "text": ra_content})
-            else:
-                # Keep other types of content as they are
-                new_content.append(content_item)
-        new_user_message = {**user_message, "content": new_content}
-    else:
-        new_user_message = {
-            **user_message,
-            "content": ra_content,
-        }
-
-    messages[last_user_message_idx] = new_user_message
-
-    return messages, citations
+    context_string = context_string.strip()
+    return context_string, citations
