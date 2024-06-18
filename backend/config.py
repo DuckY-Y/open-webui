@@ -197,7 +197,7 @@ except:
     CONFIG_DATA = {}
 
 
-RAG_STATE = 0
+RAG_STATE = int(0)
 
 
 ####################################
