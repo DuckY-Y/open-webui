@@ -196,9 +196,10 @@ try:
 except:
     CONFIG_DATA = {}
 
-
-RAG_STATE = int(0)
-
+try:
+    RAG_STATE = int(0)
+except:
+    RAG_STATE = 0
 
 ####################################
 # Config helpers
@@ -277,6 +278,8 @@ class AppConfig:
 
     def __init__(self):
         super().__setattr__("_state", {})
+        self.RAG_STATE = PersistentConfig('RAG_STATE', 'rag.state', 0)  # Initialize RAG_STATE
+
 
     def __setattr__(self, key, value):
         if isinstance(value, PersistentConfig):

@@ -144,7 +144,7 @@ app = FastAPI(
 )
 
 app.state.config = AppConfig()
-app.state.config.RAG_STATE = RAG_STATE
+app.state.config.RAG_STATE = RAG_STATE = int(0)
 
 app.state.config.ENABLE_OPENAI_API = ENABLE_OPENAI_API
 app.state.config.ENABLE_OLLAMA_API = ENABLE_OLLAMA_API
@@ -190,6 +190,94 @@ async def get_function_call_response(messages, tool_id, template, task_model_id,
         + f"\nQuery: {user_message}"
     )
 
+    print(prompt)
+
+    payload = {
+        "model": task_model_id,
+        "messages": [
+            {"role": "system", "content": content},
+            {"role": "user", "content": f"Query: {prompt}"},
+        ],
+        "stream": False,
+    }
+
+    try:
+        payload = filter_pipeline(payload, user)
+    except Exception as e:
+        raise e
+
+    model = app.state.MODELS[task_model_id]
+
+    response = None
+    try:
+        if model["owned_by"] == "ollama":
+            response = await generate_ollama_chat_completion(
+                OpenAIChatCompletionForm(**payload), user=user
+            )
+        else:
+            response = await generate_openai_chat_completion(payload, user=user)
+
+        content = None
+
+        if hasattr(response, "body_iterator"):
+            async for chunk in response.body_iterator:
+                data = json.loads(chunk.decode("utf-8"))
+                content = data["choices"][0]["message"]["content"]
+
+            # Cleanup any remaining background tasks if necessary
+            if response.background is not None:
+                await response.background()
+        else:
+            content = response["choices"][0]["message"]["content"]
+
+        # Parse the function response
+        if content is not None:
+            print(f"content: {content}")
+            result = json.loads(content)
+            print(result)
+
+            # Call the function
+            if "name" in result:
+                if tool_id in webui_app.state.TOOLS:
+                    toolkit_module = webui_app.state.TOOLS[tool_id]
+                else:
+                    toolkit_module = load_toolkit_module_by_id(tool_id)
+                    webui_app.state.TOOLS[tool_id] = toolkit_module
+
+                function = getattr(toolkit_module, result["name"])
+                function_result = None
+                try:
+                    # Get the signature of the function
+                    sig = inspect.signature(function)
+                    # Check if '__user__' is a parameter of the function
+                    if "__user__" in sig.parameters:
+                        # Call the function with the '__user__' parameter included
+                        function_result = function(
+                            **{
+                                **result["parameters"],
+                                "__user__": {
+                                    "id": user.id,
+                                    "email": user.email,
+                                    "name": user.name,
+                                    "role": user.role,
+                                },
+                            }
+                        )
+                    else:
+                        # Call the function without modifying the parameters
+                        function_result = function(**result["parameters"])
+                except Exception as e:
+                    print(e)
+
+                # Add the function result to the system prompt
+                if function_result:
+                    return function_result
+    except Exception as e:
+        print(f"Error: {e}")
+
+    return None
+
+
 class ChatCompletionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         
@@ -218,20 +306,24 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
             # data["modified"] = True  # Example modification
 
             prompt = get_last_user_message(data["messages"])
+            context = ""
 
             if bool(rag_state):
                 try:
                     data = {**data}
                     rag_context, citations = rag_addition(
-                        docs=data["docs"],
                         messages=data["messages"],
-                        template=rag_app.state.config.RAG_TEMPLATE,
-                        r=rag_app.state.config.RELEVANCE_THRESHOLD,
-                        hybrid_search=rag_app.state.config.ENABLE_RAG_HYBRID_SEARCH,
+                        # template=rag_app.state.config.RAG_TEMPLATE,
+                        # r=rag_app.state.config.RELEVANCE_THRESHOLD,
+                        r=0.85,
+                        # hybrid_search=rag_app.state.config.ENABLE_RAG_HYBRID_SEARCH,
                     )
-                    context = ""
+                    
                     if rag_context:
                         context += ("\n" if context != "" else "") + rag_context
+                        print("Rag Successful")
+                    print("Rag Successful ish")
+                    
 
                 except Exception as e:
                     log.exception(e)
@@ -275,15 +367,14 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
             if isinstance(response, StreamingResponse):
                 # If it's a streaming response, inject it as SSE event or NDJSON line
                 content_type = response.headers.get("Content-Type")
-                if "text/event-stream" in content_type:
+                if content_type and "text/event-stream" in content_type:
                     return StreamingResponse(
                         self.openai_stream_wrapper(response.body_iterator, citations),
                     )
-                if "application/x-ndjson" in content_type:
+                if content_type and "application/x-ndjson" in content_type:
                     return StreamingResponse(
                         self.ollama_stream_wrapper(response.body_iterator, citations),
                     )
-
         return response
 
     async def _receive(self, body: bytes):

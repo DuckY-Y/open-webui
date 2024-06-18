@@ -8,9 +8,9 @@ config = AppConfig()
 
 class VectorSearch:
     def __init__(self):
-        self.mq = mq.Client(url="http://localhost:8882")
+        self.mq = mq.Client(url="http://42:8882")
 
-    def index_search(self, index, q, limit=3, offset=0, filter_string=None, searchableAttributes=["*"],
+    def index_search(self, q, limit=3, offset=0, filter_string=None, searchableAttributes=["*"],
                     showHighlights=True, searchMethod="TENSOR", attributesToRetrieve=None,
                     efSearch=2000, approximate=True, scoreModifiers=None):
         """
@@ -31,7 +31,8 @@ class VectorSearch:
 
         Returns a json format of the search output from mq.index(index).search().
         """
-
+        print("checkpoint 3")
+        index="masterdocs"
         output = self.mq.index(index).search(
         q=q,
         limit=limit,
@@ -41,7 +42,7 @@ class VectorSearch:
 
     def output_parser(self, r_input, r=0.85, limit=3, integer=1):
         output_list = []
-
+        print("checkpoint 4")
         for i in range(min(limit, len(r_input['hits']))):
             doc = r_input['hits'][i]
             doc_id = doc.get('_id')
@@ -60,7 +61,7 @@ class VectorSearch:
             content_keys = [key for key in doc.keys() if key.startswith('content_')]
             content_keys.sort(key=lambda x: int(x.split('_')[1]))
             content = {f'content_{str(j).zfill(2)}': doc[key] for j, key in enumerate(content_keys)}
-
+            print("checkpoint 5 content")
             if integer == 1:
                 # Mode 1: Filter content based on highlights
                 content_filtered = {}
@@ -136,17 +137,17 @@ def rag_template(template: str, context: str, query: str):
 
 def rag_addition(
     messages,
-    template,
+    # template,
     r, # relevance threshold
-    hybrid_search,
+    # hybrid_search,
 ):
-    print(f"Rag input: {messages} {template} {hybrid_search}")
+    # print(f"Rag input: {messages} {template} {hybrid_search}")
 
     query = get_last_user_message(messages)
-
+    print("checkpoint 1")
     integ = config.RAG_STATE
     if query != "":
-        r_output = V.index_search(query, limit=3)
+        r_output = V.index_search(q=query, limit=3)
         f_output = V.output_parser(r_output, r=r, integer=integ, limit=3)
         if f_output is False:
             # TODO: Handle this case
@@ -157,7 +158,7 @@ def rag_addition(
             except json.JSONDecodeError:
                 print("Failed to parse JSON response from output_parser.")
         
-
+    print("checkpoint 2")
     context_string = ""
     citations = []
     for item in parsed_output:
