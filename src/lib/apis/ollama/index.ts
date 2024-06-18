@@ -344,6 +344,8 @@ export const generateTextCompletion = async (token: string = '', model: string, 
 	return res;
 };
 
+// TODO: Change this maybe:
+
 export const generateChatCompletion = async (token: string = '', body: object) => {
 	let controller = new AbortController();
 	let error = null;

@@ -94,6 +94,9 @@ from config import (
 
 from constants import ERROR_MESSAGES
 
+from apps.rag.vectorSearch import VectorSearch
+V = VectorSearch()
+
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["RAG"])
 
@@ -178,11 +181,6 @@ async def set_state(state):
     
 
 
-
-
-
-
-
 @app.get("/embedding")
 async def get_embedding_config(user=Depends(get_admin_user)):
     return {
@@ -241,77 +239,6 @@ async def get_rag_config(user=Depends(get_admin_user)):
         #     "translation": app.state.YOUTUBE_LOADER_TRANSLATION,
         # },
     }
-
-
-# class ChunkParamUpdateForm(BaseModel):
-#     chunk_size: int
-#     chunk_overlap: int
-
-
-# class YoutubeLoaderConfig(BaseModel):
-#     language: List[str]
-#     translation: Optional[str] = None
-
-
-# class ConfigUpdateForm(BaseModel):
-#     pdf_extract_images: Optional[bool] = None
-#     chunk: Optional[ChunkParamUpdateForm] = None
-#     web_loader_ssl_verification: Optional[bool] = None
-#     youtube: Optional[YoutubeLoaderConfig] = None
-
-
-# @app.post("/config/update")
-# async def update_rag_config(form_data: ConfigUpdateForm, user=Depends(get_admin_user)):
-#     app.state.config.PDF_EXTRACT_IMAGES = (
-#         form_data.pdf_extract_images
-#         if form_data.pdf_extract_images is not None
-#         else app.state.config.PDF_EXTRACT_IMAGES
-#     )
-
-#     app.state.config.CHUNK_SIZE = (
-#         form_data.chunk.chunk_size
-#         if form_data.chunk is not None
-#         else app.state.config.CHUNK_SIZE
-#     )
-
-#     app.state.config.CHUNK_OVERLAP = (
-#         form_data.chunk.chunk_overlap
-#         if form_data.chunk is not None
-#         else app.state.config.CHUNK_OVERLAP
-#     )
-
-#     app.state.config.ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION = (
-#         form_data.web_loader_ssl_verification
-#         if form_data.web_loader_ssl_verification != None
-#         else app.state.config.ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION
-#     )
-
-#     app.state.config.YOUTUBE_LOADER_LANGUAGE = (
-#         form_data.youtube.language
-#         if form_data.youtube is not None
-#         else app.state.config.YOUTUBE_LOADER_LANGUAGE
-#     )
-
-#     app.state.YOUTUBE_LOADER_TRANSLATION = (
-#         form_data.youtube.translation
-#         if form_data.youtube is not None
-#         else app.state.YOUTUBE_LOADER_TRANSLATION
-#     )
-
-#     return {
-#         "status": True,
-#         "pdf_extract_images": app.state.config.PDF_EXTRACT_IMAGES,
-#         "chunk": {
-#             "chunk_size": app.state.config.CHUNK_SIZE,
-#             "chunk_overlap": app.state.config.CHUNK_OVERLAP,
-#         },
-#         "web_loader_ssl_verification": app.state.config.ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION,
-#         "youtube": {
-#             "language": app.state.config.YOUTUBE_LOADER_LANGUAGE,
-#             "translation": app.state.YOUTUBE_LOADER_TRANSLATION,
-#         },
-#     }
-
 
 @app.get("/template")
 async def get_rag_template(user=Depends(get_current_user)):
@@ -398,6 +325,66 @@ def query_doc_handler(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=ERROR_MESSAGES.DEFAULT("This functionality has been disabled"),
         )
+
+
+
+def resolve_hostname(hostname):
+    # Get address information
+    addr_info = socket.getaddrinfo(hostname, None)
+
+    # Extract IP addresses from address information
+    ipv4_addresses = [info[4][0] for info in addr_info if info[0] == socket.AF_INET]
+    ipv6_addresses = [info[4][0] for info in addr_info if info[0] == socket.AF_INET6]
+
+    return ipv4_addresses, ipv6_addresses
+
+
+
+##########################################################################################
+
+
+
+class SearchVector(BaseModel):
+    q: str
+    limit: int = 3
+
+@app.post("/query/index")
+def query_index_handler(
+    vector_data: SearchVector,
+    user=Depends(get_current_user),
+):
+    try:
+        say = "hi"
+        # r_output, metadata = V.index_search(vector_data.q, vector_data.limit)
+        # f_output = V.output_cleaner(r_output)
+
+
+    except Exception as e:
+        log.exception(e)
+        raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=ERROR_MESSAGES.DEFAULT("Index search failed"),
+        )
+
+
+
+class SwitchStateForm(BaseModel):
+    switchState: int
+
+@app.post("/update/state")
+async def update_switch_state(switch_state: SwitchStateForm):
+    print("\n")
+    print(f"This has been sent to the backend:  {switch_state.switchState}")
+    print("\n")
+    config.RAG_STATE = switch_state.switchState
+    return {switch_state.switchState}
+   
+
+
+##########################################################################################
+################################## Old shit below ########################################
+##########################################################################################
+
 
 
 class QueryCollectionsForm(BaseModel):
@@ -517,16 +504,135 @@ def query_collection_handler(
 #                 raise ValueError(ERROR_MESSAGES.INVALID_URL)
 #     return WebBaseLoader(url, verify_ssl=verify_ssl)
 
+# class TextRAGForm(BaseModel):
+#     name: str
+#     content: str
+#     collection_name: Optional[str] = None
 
-def resolve_hostname(hostname):
-    # Get address information
-    addr_info = socket.getaddrinfo(hostname, None)
 
-    # Extract IP addresses from address information
-    ipv4_addresses = [info[4][0] for info in addr_info if info[0] == socket.AF_INET]
-    ipv6_addresses = [info[4][0] for info in addr_info if info[0] == socket.AF_INET6]
+# @app.post("/text")
+# def store_text(
+#     form_data: TextRAGForm,
+#     user=Depends(get_current_user),
+# ):
 
-    return ipv4_addresses, ipv6_addresses
+#     collection_name = form_data.collection_name
+#     if collection_name == None:
+#         collection_name = calculate_sha256_string(form_data.content)
+
+#     result = store_text_in_vector_db(
+#         form_data.content,
+#         metadata={"name": form_data.name, "created_by": user.id},
+#         collection_name=collection_name,
+#     )
+
+#     if result:
+#         return {"status": True, "collection_name": collection_name}
+#     else:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=ERROR_MESSAGES.DEFAULT(),
+#         )
+
+# TODO: /\\/ Deze 2 zijn misschien nog handig om aantepassen
+
+# @app.get("/scan")
+# def scan_docs_dir(user=Depends(get_admin_user)):
+#     for path in Path(DOCS_DIR).rglob("./**/*"):
+#         try:
+#             if path.is_file() and not path.name.startswith("."):
+#                 tags = extract_folders_after_data_docs(path)
+#                 filename = path.name
+#                 file_content_type = mimetypes.guess_type(path)
+
+#                 f = open(path, "rb")
+#                 collection_name = calculate_sha256(f)[:63]
+#                 f.close()
+
+#                 loader, known_type = get_loader(
+#                     filename, file_content_type[0], str(path)
+#                 )
+#                 data = loader.load()
+
+#                 try:
+#                     result = store_data_in_vector_db(data, collection_name)
+
+#                     if result:
+#                         sanitized_filename = sanitize_filename(filename)
+#                         doc = Documents.get_doc_by_name(sanitized_filename)
+
+#                         if doc == None:
+#                             doc = Documents.insert_new_doc(
+#                                 user.id,
+#                                 DocumentForm(
+#                                     **{
+#                                         "name": sanitized_filename,
+#                                         "title": filename,
+#                                         "collection_name": collection_name,
+#                                         "filename": filename,
+#                                         "content": (
+#                                             json.dumps(
+#                                                 {
+#                                                     "tags": list(
+#                                                         map(
+#                                                             lambda name: {"name": name},
+#                                                             tags,
+#                                                         )
+#                                                     )
+#                                                 }
+#                                             )
+#                                             if len(tags)
+#                                             else "{}"
+#                                         ),
+#                                     }
+#                                 ),
+#                             )
+#                 except Exception as e:
+#                     log.exception(e)
+#                     pass
+
+#         except Exception as e:
+#             log.exception(e)
+
+#     return True
+
+
+# @app.get("/reset/db")
+# def reset_vector_db(user=Depends(get_admin_user)):
+#     CHROMA_CLIENT.reset()
+
+
+# @app.get("/reset")
+# def reset(user=Depends(get_admin_user)) -> bool:
+#     folder = f"{UPLOAD_DIR}"
+#     for filename in os.listdir(folder):
+#         file_path = os.path.join(folder, filename)
+#         try:
+#             if os.path.isfile(file_path) or os.path.islink(file_path):
+#                 os.unlink(file_path)
+#             elif os.path.isdir(file_path):
+#                 shutil.rmtree(file_path)
+#         except Exception as e:
+#             log.error("Failed to delete %s. Reason: %s" % (file_path, e))
+
+#     try:
+#         CHROMA_CLIENT.reset()
+#     except Exception as e:
+#         log.exception(e)
+
+#     return True
+
+
+# if ENV == "dev":
+
+#     @app.get("/ef")
+#     async def get_embeddings():
+#         return {"result": app.state.EMBEDDING_FUNCTION("hello world")}
+
+#     @app.get("/ef/{text}")
+#     async def get_embeddings_text(text: str):
+#         return {"result": app.state.EMBEDDING_FUNCTION(text)}
+
 
 
 # def store_data_in_vector_db(data, collection_name, overwrite: bool = False) -> bool:
@@ -754,131 +860,73 @@ def store_doc(
             )
 
 
-# class TextRAGForm(BaseModel):
-#     name: str
-#     content: str
-#     collection_name: Optional[str] = None
+
+# class ChunkParamUpdateForm(BaseModel):
+#     chunk_size: int
+#     chunk_overlap: int
 
 
-# @app.post("/text")
-# def store_text(
-#     form_data: TextRAGForm,
-#     user=Depends(get_current_user),
-# ):
+# class YoutubeLoaderConfig(BaseModel):
+#     language: List[str]
+#     translation: Optional[str] = None
 
-#     collection_name = form_data.collection_name
-#     if collection_name == None:
-#         collection_name = calculate_sha256_string(form_data.content)
 
-#     result = store_text_in_vector_db(
-#         form_data.content,
-#         metadata={"name": form_data.name, "created_by": user.id},
-#         collection_name=collection_name,
+# class ConfigUpdateForm(BaseModel):
+#     pdf_extract_images: Optional[bool] = None
+#     chunk: Optional[ChunkParamUpdateForm] = None
+#     web_loader_ssl_verification: Optional[bool] = None
+#     youtube: Optional[YoutubeLoaderConfig] = None
+
+
+# @app.post("/config/update")
+# async def update_rag_config(form_data: ConfigUpdateForm, user=Depends(get_admin_user)):
+#     app.state.config.PDF_EXTRACT_IMAGES = (
+#         form_data.pdf_extract_images
+#         if form_data.pdf_extract_images is not None
+#         else app.state.config.PDF_EXTRACT_IMAGES
 #     )
 
-#     if result:
-#         return {"status": True, "collection_name": collection_name}
-#     else:
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=ERROR_MESSAGES.DEFAULT(),
-#         )
+#     app.state.config.CHUNK_SIZE = (
+#         form_data.chunk.chunk_size
+#         if form_data.chunk is not None
+#         else app.state.config.CHUNK_SIZE
+#     )
 
-# TODO: /\\/ Deze 2 zijn misschien nog handig om aantepassen
+#     app.state.config.CHUNK_OVERLAP = (
+#         form_data.chunk.chunk_overlap
+#         if form_data.chunk is not None
+#         else app.state.config.CHUNK_OVERLAP
+#     )
 
-# @app.get("/scan")
-# def scan_docs_dir(user=Depends(get_admin_user)):
-#     for path in Path(DOCS_DIR).rglob("./**/*"):
-#         try:
-#             if path.is_file() and not path.name.startswith("."):
-#                 tags = extract_folders_after_data_docs(path)
-#                 filename = path.name
-#                 file_content_type = mimetypes.guess_type(path)
+#     app.state.config.ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION = (
+#         form_data.web_loader_ssl_verification
+#         if form_data.web_loader_ssl_verification != None
+#         else app.state.config.ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION
+#     )
 
-#                 f = open(path, "rb")
-#                 collection_name = calculate_sha256(f)[:63]
-#                 f.close()
+#     app.state.config.YOUTUBE_LOADER_LANGUAGE = (
+#         form_data.youtube.language
+#         if form_data.youtube is not None
+#         else app.state.config.YOUTUBE_LOADER_LANGUAGE
+#     )
 
-#                 loader, known_type = get_loader(
-#                     filename, file_content_type[0], str(path)
-#                 )
-#                 data = loader.load()
+#     app.state.YOUTUBE_LOADER_TRANSLATION = (
+#         form_data.youtube.translation
+#         if form_data.youtube is not None
+#         else app.state.YOUTUBE_LOADER_TRANSLATION
+#     )
 
-#                 try:
-#                     result = store_data_in_vector_db(data, collection_name)
+#     return {
+#         "status": True,
+#         "pdf_extract_images": app.state.config.PDF_EXTRACT_IMAGES,
+#         "chunk": {
+#             "chunk_size": app.state.config.CHUNK_SIZE,
+#             "chunk_overlap": app.state.config.CHUNK_OVERLAP,
+#         },
+#         "web_loader_ssl_verification": app.state.config.ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION,
+#         "youtube": {
+#             "language": app.state.config.YOUTUBE_LOADER_LANGUAGE,
+#             "translation": app.state.YOUTUBE_LOADER_TRANSLATION,
+#         },
+#     }
 
-#                     if result:
-#                         sanitized_filename = sanitize_filename(filename)
-#                         doc = Documents.get_doc_by_name(sanitized_filename)
-
-#                         if doc == None:
-#                             doc = Documents.insert_new_doc(
-#                                 user.id,
-#                                 DocumentForm(
-#                                     **{
-#                                         "name": sanitized_filename,
-#                                         "title": filename,
-#                                         "collection_name": collection_name,
-#                                         "filename": filename,
-#                                         "content": (
-#                                             json.dumps(
-#                                                 {
-#                                                     "tags": list(
-#                                                         map(
-#                                                             lambda name: {"name": name},
-#                                                             tags,
-#                                                         )
-#                                                     )
-#                                                 }
-#                                             )
-#                                             if len(tags)
-#                                             else "{}"
-#                                         ),
-#                                     }
-#                                 ),
-#                             )
-#                 except Exception as e:
-#                     log.exception(e)
-#                     pass
-
-#         except Exception as e:
-#             log.exception(e)
-
-#     return True
-
-
-# @app.get("/reset/db")
-# def reset_vector_db(user=Depends(get_admin_user)):
-#     CHROMA_CLIENT.reset()
-
-
-# @app.get("/reset")
-# def reset(user=Depends(get_admin_user)) -> bool:
-#     folder = f"{UPLOAD_DIR}"
-#     for filename in os.listdir(folder):
-#         file_path = os.path.join(folder, filename)
-#         try:
-#             if os.path.isfile(file_path) or os.path.islink(file_path):
-#                 os.unlink(file_path)
-#             elif os.path.isdir(file_path):
-#                 shutil.rmtree(file_path)
-#         except Exception as e:
-#             log.error("Failed to delete %s. Reason: %s" % (file_path, e))
-
-#     try:
-#         CHROMA_CLIENT.reset()
-#     except Exception as e:
-#         log.exception(e)
-
-#     return True
-
-
-# if ENV == "dev":
-
-#     @app.get("/ef")
-#     async def get_embeddings():
-#         return {"result": app.state.EMBEDDING_FUNCTION("hello world")}
-
-#     @app.get("/ef/{text}")
-#     async def get_embeddings_text(text: str):
-#         return {"result": app.state.EMBEDDING_FUNCTION(text)}

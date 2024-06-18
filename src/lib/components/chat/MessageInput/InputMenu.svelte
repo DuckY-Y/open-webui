@@ -4,29 +4,28 @@
 	import { getContext } from 'svelte';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
-	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
-	import Pencil from '$lib/components/icons/Pencil.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import Tags from '$lib/components/chat/Tags.svelte';
-	import Share from '$lib/components/icons/Share.svelte';
-	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
 	import DocumentArrowUpSolid from '$lib/components/icons/DocumentArrowUpSolid.svelte';
-	import Switch from '$lib/components/common/Switch.svelte';
-	import GlobeAltSolid from '$lib/components/icons/GlobeAltSolid.svelte';
-	import { config } from '$lib/stores';
+
 	import { switchState } from '$lib/stores';
+	import { get } from 'svelte/store';
+	import { updateRagState } from '$lib/apis/rag';
 
 	const i18n = getContext('i18n');
 	let show = false;
 
 	export let onClose: Function;
 
-	function toggleState(event: CustomEvent<{ currentTarget: EventTarget & HTMLDivElement; originalEvent: MouseEvent; }>) {
-		event.stopPropagation(); // Prevent event from bubbling up
-		switchState.update(current => (current + 1) % 3); // Cycles through 0, 1, 2
-	}
-
+	async function toggleState(event: CustomEvent<{ currentTarget: EventTarget & HTMLDivElement; originalEvent: MouseEvent; }>) {
+        event.stopPropagation();
+        switchState.update(current => (current + 1) % 2); // Cycles through 0, 1 (, 2 -removed)
+		const switchState_updated = get(switchState);
+		console.log(switchState_updated);
+		await updateRagState(localStorage.token, switchState_updated);
+    }
+	
 	console.log(switchState);
+	console.log("InputMenu.svelte ^^")
 </script>
 
 <Dropdown

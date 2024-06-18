@@ -773,10 +773,6 @@
 					<div class=" flex">
 						<div class=" ml-1 self-end mb-2 flex space-x-1">
 							<InputMenu
-								bind:webSearchEnabled
-								uploadFilesHandler={() => {
-									filesInputElement.click();
-								}}
 								onClose={async () => {
 									await tick();
 									chatTextAreaElement?.focus();
@@ -788,13 +784,20 @@
 								>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 16 16"
-										fill="currentColor"
-										class="size-5"
-									>
-										<path
-											d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"
-										/>
+										viewBox="0 0 20 20"
+										class="size-5">
+										<!-- Define a linear gradient -->
+										<defs>
+											<linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+												<stop offset="0%" stop-color="#ff0000"/> <!-- Start color -->
+												<stop offset="100%" stop-color="#0000ff"/> <!-- End color -->
+											</linearGradient>
+										</defs>
+										
+										<!-- Group for the icon -->
+										<g fill="url(#gradient)"> <!-- Apply the linear gradient to the icon -->
+											<path d="M10 6c3.9 0 7-.9 7-2s-3.1-2-7-2-7 .9-7 2 3.1 2 7 2zm0 9c-3.9 0-7-.9-7-2v3c0 1.1 3.1 2 7 2s7-.9 7-2v-3c0 1.1-3.1 2-7 2zm0-4c-3.9 0-7-.9-7-2v3c0 1.1 3.1 2 7 2s7-.9 7-2V9c0 1.1-3.1 2-7 2zm0-4c-3.9 0-7-.9-7-2v3c0 1.1 3.1 2 7 2s7-.9 7-2V5c0 1.1-3.1 2-7 2z"/>
+										</g>
 									</svg>
 								</button>
 							</InputMenu>

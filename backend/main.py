@@ -25,7 +25,7 @@ from apps.openai.main import app as openai_app, get_all_models as get_openai_mod
 
 from apps.audio.main import app as audio_app
 from apps.images.main import app as images_app
-# from apps.rag.main import app as rag_app
+from apps.rag.main import app as rag_app
 from apps.webui.main import app as webui_app
 
 import asyncio
@@ -40,6 +40,8 @@ from utils.utils import (
     get_http_authorization_cred,
 )
 # from apps.rag.utils import rag_messages
+from apps.rag.vectorSearch import VectorSearch, rag_addition
+from apps.rag.main import query_index_handler
 
 from config import (
     CONFIG_DATA,
@@ -91,7 +93,7 @@ print(
       |_|                                               
 
       
-v{VERSION} - building the best open-source AI user interface.
+v{VERSION} - hi.
 {f"Commit: {WEBUI_BUILD_HASH}" if WEBUI_BUILD_HASH != "dev-build" else ""}
 https://github.com/open-webui/open-webui
 """
@@ -123,7 +125,7 @@ app.state.MODELS = {}
 
 origins = ["*"]
 
-# Custom middleware to add security headers
+# # Custom middleware to add security headers
 # class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 #     async def dispatch(self, request: Request, call_next):
 #         response: Response = await call_next(request)
@@ -134,96 +136,104 @@ origins = ["*"]
 
 # app.add_middleware(SecurityHeadersMiddleware)
 
-# TODO: Main rag function?
-# class RAGMiddleware(BaseHTTPMiddleware):
-#     async def dispatch(self, request: Request, call_next):
-#         return_citations = False
+# TODO: This one runs second and needs reworking for hardcoded RAG addition
+class RAGMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        
+        rag_state = getattr(rag_app.state.config, 'RAG_STATE', None)
+        return_citations = bool(rag_state)
 
-#         if request.method == "POST" and (
-#             "/ollama/api/chat" in request.url.path
-#             or "/chat/completions" in request.url.path
-#         ):
-#             log.debug(f"request.url.path: {request.url.path}")
+        if request.method == "POST" and (
+            "/ollama/api/chat" in request.url.path
+            or "/chat/completions" in request.url.path
+        ):
+            log.debug(f"request.url.path: {request.url.path}")
 
-#             # Read the original request body
-#             body = await request.body()
-#             # Decode body to string
-#             body_str = body.decode("utf-8")
-#             # Parse string to JSON
-#             data = json.loads(body_str) if body_str else {}
-
-#             return_citations = data.get("citations", False)
-#             if "citations" in data:
-#                 del data["citations"]
-
-#             # Example: Add a new key-value pair or modify existing ones
-#             # data["modified"] = True  # Example modification
-#             if "docs" in data:
-#                 data = {**data}
-#                 data["messages"], citations = rag_messages(
-#                     docs=data["docs"],
-#                     messages=data["messages"],
-#                     template=rag_app.state.config.RAG_TEMPLATE,
-#                     embedding_function=rag_app.state.EMBEDDING_FUNCTION,
-#                     k=rag_app.state.config.TOP_K,
-#                     reranking_function=rag_app.state.sentence_transformer_rf,
-#                     r=rag_app.state.config.RELEVANCE_THRESHOLD,
-#                     hybrid_search=rag_app.state.config.ENABLE_RAG_HYBRID_SEARCH,
-#                 )
-#                 del data["docs"]
-
-#                 log.debug(
-#                     f"data['messages']: {data['messages']}, citations: {citations}"
-#                 )
-
-#             modified_body_bytes = json.dumps(data).encode("utf-8")
-
-#             # Replace the request body with the modified one
-#             request._body = modified_body_bytes
-
-#             # Set custom header to ensure content-length matches new body length
-#             request.headers.__dict__["_list"] = [
-#                 (b"content-length", str(len(modified_body_bytes)).encode("utf-8")),
-#                 *[
-#                     (k, v)
-#                     for k, v in request.headers.raw
-#                     if k.lower() != b"content-length"
-#                 ],
-#             ]
-
-#         response = await call_next(request)
-
-#         if return_citations:
-#             # Inject the citations into the response
-#             if isinstance(response, StreamingResponse):
-#                 # If it's a streaming response, inject it as SSE event or NDJSON line
-#                 content_type = response.headers.get("Content-Type")
-#                 if "text/event-stream" in content_type:
-#                     return StreamingResponse(
-#                         self.openai_stream_wrapper(response.body_iterator, citations),
-#                     )
-#                 if "application/x-ndjson" in content_type:
-#                     return StreamingResponse(
-#                         self.ollama_stream_wrapper(response.body_iterator, citations),
-#                     )
-
-#         return response
-
-#     async def _receive(self, body: bytes):
-#         return {"type": "http.request", "body": body, "more_body": False}
-
-#     async def openai_stream_wrapper(self, original_generator, citations):
-#         yield f"data: {json.dumps({'citations': citations})}\n\n"
-#         async for data in original_generator:
-#             yield data
-
-#     async def ollama_stream_wrapper(self, original_generator, citations):
-#         yield f"{json.dumps({'citations': citations})}\n"
-#         async for data in original_generator:
-#             yield data
+            # Read the original request body
+            body = await request.body()
+            # Decode body to string
+            body_str = body.decode("utf-8")
+            # Parse string to JSON
+            data = json.loads(body_str) if body_str else {}
 
 
-# app.add_middleware(RAGMiddleware)
+            # return_citations = data.get("citations", False)
+            if "citations" in data:
+                del data["citations"]
+
+            # Example: Add a new key-value pair or modify existing ones
+            # data["modified"] = True  # Example modification
+
+            if bool(rag_state):
+                try:
+                    data = {**data}
+                    data["messages"], citations = rag_addition(
+                        docs=data["docs"],
+                        messages=data["messages"],
+                        template=rag_app.state.config.RAG_TEMPLATE,
+                        r=rag_app.state.config.RELEVANCE_THRESHOLD,
+                        hybrid_search=rag_app.state.config.ENABLE_RAG_HYBRID_SEARCH,
+                    )
+                except Exception as e:
+                    log.exception(e)
+                    print("RAG addition failed")
+
+
+            if "docs" in data:
+                del data["docs"]
+
+                log.debug(
+                    f"data['messages']: {data['messages']}, citations: {citations}"
+                )
+
+            modified_body_bytes = json.dumps(data).encode("utf-8")
+
+            # Replace the request body with the modified one
+            request._body = modified_body_bytes
+
+            # Set custom header to ensure content-length matches new body length
+            request.headers.__dict__["_list"] = [
+                (b"content-length", str(len(modified_body_bytes)).encode("utf-8")),
+                *[
+                    (k, v)
+                    for k, v in request.headers.raw
+                    if k.lower() != b"content-length"
+                ],
+            ]
+
+        response = await call_next(request)
+
+        if return_citations:
+            # Inject the citations into the response
+            if isinstance(response, StreamingResponse):
+                # If it's a streaming response, inject it as SSE event or NDJSON line
+                content_type = response.headers.get("Content-Type")
+                if "text/event-stream" in content_type:
+                    return StreamingResponse(
+                        self.openai_stream_wrapper(response.body_iterator, citations),
+                    )
+                if "application/x-ndjson" in content_type:
+                    return StreamingResponse(
+                        self.ollama_stream_wrapper(response.body_iterator, citations),
+                    )
+
+        return response
+
+    async def _receive(self, body: bytes):
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def openai_stream_wrapper(self, original_generator, citations):
+        yield f"data: {json.dumps({'citations': citations})}\n\n"
+        async for data in original_generator:
+            yield data
+
+    async def ollama_stream_wrapper(self, original_generator, citations):
+        yield f"{json.dumps({'citations': citations})}\n"
+        async for data in original_generator:
+            yield data
+
+
+app.add_middleware(RAGMiddleware)
 
 
 class PipelineMiddleware(BaseHTTPMiddleware):
@@ -340,7 +350,7 @@ class PipelineMiddleware(BaseHTTPMiddleware):
     async def _receive(self, body: bytes):
         return {"type": "http.request", "body": body, "more_body": False}
 
-
+# This middleware runs first
 app.add_middleware(PipelineMiddleware)
 
 
@@ -381,7 +391,7 @@ app.mount("/openai", openai_app)
 
 app.mount("/images/api/v1", images_app)
 app.mount("/audio/api/v1", audio_app)
-# app.mount("/rag/api/v1", rag_app)
+app.mount("/rag/api/v1", rag_app)
 
 app.mount("/api/v1", webui_app)
 

@@ -599,6 +599,8 @@
 			}
 		});
 
+		// TODO: Change this:
+
 		const docs = messages
 			.filter((message) => message?.files ?? null)
 			.map((message) =>
