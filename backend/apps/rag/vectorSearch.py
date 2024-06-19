@@ -8,7 +8,7 @@ config = AppConfig()
 
 class VectorSearch:
     def __init__(self):
-        self.mq = mq.Client(url="http://42:8882")
+        self.mq = mq.Client(url="http://marqo:8882")
 
     def index_search(self, q, limit=3, offset=0, filter_string=None, searchableAttributes=["*"],
                     showHighlights=True, searchMethod="TENSOR", attributesToRetrieve=None,
@@ -100,20 +100,19 @@ class VectorSearch:
         if not output_list:
             return False
 
-        output_string = pprint.pformat(output_list, indent=2)
 
-        with open('./testing/output_dic.json', 'w') as f:
-            json.dump(output_list, f, indent=2)
+        # with open('./testing/output_dic.json', 'w') as f:
+        #     json.dump(output_list, f, indent=2)
 
-        with open('./testing/output.txt', 'w') as f:
-            f.write(output_string)
-        with open('./testing/debug_output.txt', 'w') as debug_file:
-            json.dump(r_input, debug_file, indent=2)
+        # with open('./testing/output.txt', 'w') as f:
+        #     f.write(output_string)
+        # with open('./testing/debug_output.txt', 'w') as debug_file:
+        #     json.dump(r_input, debug_file, indent=2)
 
 
         pMs = r_input.get("processingTimeMs", 0)
         print(f"Rag processing time: {pMs} ms")
-        return output_string
+        return output_list
         
 V = VectorSearch()
 
@@ -146,22 +145,25 @@ def rag_addition(
     query = get_last_user_message(messages)
     print("checkpoint 1")
     integ = config.RAG_STATE
+    parsed_output = []
     if query != "":
         r_output = V.index_search(q=query, limit=3)
-        f_output = V.output_parser(r_output, r=r, integer=integ, limit=3)
+        f_output = V.output_parser(r_output, r=r, integer=integ, limit=3) # f_output is in json format
         if f_output is False:
             # TODO: Handle this case
             print("Relevance threshold check failed.")
         else:
-            try:
-                parsed_output = json.loads(f_output)
-            except json.JSONDecodeError:
-                print("Failed to parse JSON response from output_parser.")
-        
+            parsed_output = f_output
+            print("RAG successfully extracted")
     print("checkpoint 2")
     context_string = ""
     citations = []
     for item in parsed_output:
+        print(f"Processing item of type: {type(item)}")
+        if not isinstance(item, dict):
+            print(f"Expected a dict, but got: {type(item)}")
+            continue
+
         content_N = []
         # Check if 'content' key exists and is a list with at least one item
         if item.get("content") and isinstance(item["content"], list) and len(item["content"]) > 0:
